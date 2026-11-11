@@ -66,6 +66,14 @@ header.site .wrap { display: flex; align-items: center; justify-content: space-b
 }
 .ball { flex: none; }
 header.site .btn { white-space: nowrap; }
+.head-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.user-nick { font-size: 14px; font-weight: 600; color: var(--muted); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.link { border-color: transparent; background: none; color: var(--accent); padding: 0 6px; margin-right: auto; }
+@media (max-width: 480px) {
+  header.site .btn { padding: 0 12px; font-size: 14px; }
+  .brand { font-size: 18px; }
+  .user-nick { display: none; }
+}
 .ball {
   width: 22px; height: 22px; border-radius: 50%;
   background:

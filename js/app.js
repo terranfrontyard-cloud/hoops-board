@@ -3,11 +3,17 @@
 (function () {
   'use strict';
 
-  const { isConfigured, callRpc } = window.HoopsApi;
+  const { isDemo, callRpc, auth } = window.HoopsApi;
   const $ = (sel) => document.querySelector(sel);
 
   const POSITIONS = ['무관', '가드', '포워드', '센터'];
-  const state = { games: [], filter: 'open', query: '', editing: null };
+  const state = {
+    games: [], filter: 'open', query: '',
+    editing: null,        // 수정 중인 모집글 (새 글이면 null)
+    user: null,           // 로그인한 회원 { email, nickname }
+    authMode: 'login',    // 'login' | 'signup'
+    writeAfterLogin: false,
+  };
 
   // ── 작은 도우미들 ─────────────────────────────────────────────
   function el(tag, attrs, ...kids) {
@@ -109,7 +115,7 @@
         el('span', { class: `badge ${s.key}` }, s.label)),
       el('h3', null, g.title),
       el('p', { class: 'meta' }, [g.gym_name, g.region].filter(Boolean).join(' · ')),
-      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min)].join(' · ')),
+      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min), g.is_mine && '내 글'].filter(Boolean).join(' · ')),
       el('div', { class: 'fill' },
         el('div', { class: 'fill-text' },
           el('span', null, el('b', null, String(s.filled)), ` / ${g.capacity}명`),
@@ -174,9 +180,9 @@
       el('div', { class: 'section-title' }, '참가 명단', el('span', null, `${s.filled} / ${g.capacity}명`)),
       loadError && el('p', { class: 'errors' }, loadError),
       roster,
+      g.is_mine && hostPanel(g, people),   // 내가 쓴 글에만 관리 메뉴 표시
       isJoinable(s) ? joinPanel(g) : el('p', { class: 'hint' }, '지금은 참가 신청을 받지 않는 게임입니다.'),
-      people.length > 0 && leavePanel(g),
-      hostPanel(g, people));
+      people.length > 0 && leavePanel(g));
   }
 
   function field(label, attrs) {
@@ -185,7 +191,7 @@
   }
 
   function joinPanel(g) {
-    const nick = field('닉네임', { maxlength: 20, required: true, autocomplete: 'nickname' });
+    const nick = field('닉네임', { maxlength: 20, required: true, autocomplete: 'nickname', value: state.user?.nickname });
     const pw = field('비밀번호 (취소용)', { type: 'password', minlength: 4, required: true, autocomplete: 'off' });
     const pos = el('select', null, POSITIONS.map((p) => el('option', null, p)));
     const err = el('p', { class: 'errors', hidden: true });
@@ -220,34 +226,24 @@
     return el('details', { class: 'panel' }, el('summary', null, '신청 취소하기'), form);
   }
 
+  // 글 주인(로그인한 회원)에게만 보이는 관리 메뉴. 권한은 서버에서 다시 검사함
   function hostPanel(g, people) {
-    const pw = field('주최자 비밀번호', { type: 'password', autocomplete: 'off' });
     const err = el('p', { class: 'errors', hidden: true });
-    const needPw = () => {
-      if (pw.input.value) return true;
-      showError(err, '주최자 비밀번호를 입력해 주세요');
-      pw.input.focus();
-      return false;
-    };
 
-    const editBtn = el('button', { class: 'btn small', type: 'button', onclick: () => {
-      if (needPw()) openForm(g, pw.input.value);
-    } }, '수정');
+    const editBtn = el('button', { class: 'btn small', type: 'button', onclick: () => openForm(g) }, '수정');
 
     const closeBtn = el('button', { class: 'btn small', type: 'button', onclick: () => {
-      if (!needPw()) return;
       run(closeBtn, err, async () => {
-        await callRpc('set_game_closed', { p_id: g.id, p_password: pw.input.value, p_closed: !g.is_closed });
+        await callRpc('set_game_closed', { p_id: g.id, p_closed: !g.is_closed });
         toast(g.is_closed ? '모집을 다시 열었습니다' : '모집을 마감했습니다');
         await refresh(g.id);
       });
     } }, g.is_closed ? '모집 다시 열기' : '모집 마감');
 
     const delBtn = el('button', { class: 'btn small danger', type: 'button', onclick: () => {
-      if (!needPw()) return;
       if (!confirm('모집글과 참가 신청이 모두 삭제됩니다. 삭제할까요?')) return;
       run(delBtn, err, async () => {
-        await callRpc('delete_game', { p_id: g.id, p_password: pw.input.value });
+        await callRpc('delete_game', { p_id: g.id });
         toast('모집글을 삭제했습니다');
         await refresh(g.id);
       });
@@ -257,10 +253,8 @@
     if (people.length) {
       const select = el('select', null, people.map((p) => el('option', { value: p.id }, `${p.nickname} (${p.pos})`)));
       const kickBtn = el('button', { class: 'btn small', type: 'button', onclick: () => {
-        if (!needPw()) return;
         run(kickBtn, err, async () => {
-          await callRpc('kick_participant', {
-            p_game_id: g.id, p_password: pw.input.value, p_participant_id: Number(select.value) });
+          await callRpc('kick_participant', { p_game_id: g.id, p_participant_id: Number(select.value) });
           toast('신청자를 내보냈습니다');
           await refresh(g.id);
         });
@@ -268,15 +262,18 @@
       kickRow = el('div', { class: 'inline' }, el('label', null, '신청자 내보내기', select), kickBtn);
     }
 
-    return el('details', { class: 'panel' },
-      el('summary', null, '주최자 관리'),
-      pw.node,
+    return el('div', { class: 'panel' },
+      el('h3', null, '내 모집글 관리'),
       el('div', { class: 'inline' }, editBtn, closeBtn, delBtn),
       kickRow, err);
   }
 
-  // ── 모집글 쓰기 / 수정 ───────────────────────────────────────
-  function openForm(game, password) {
+  // ── 모집글 쓰기 / 수정 (회원 전용) ───────────────────────────
+  function openForm(game) {
+    if (!state.user) {
+      openAuth('login', true);
+      return;
+    }
     state.editing = game || null;
     const form = $('#game-form');
     form.reset();
@@ -284,8 +281,6 @@
 
     $('#form-title').textContent = game ? '모집글 수정' : '모집글 쓰기';
     $('#form-submit').textContent = game ? '수정 저장' : '등록';
-    $('#f-pw-label').textContent = game ? '주최자 비밀번호' : '비밀번호 (수정·삭제용)';
-    $('#f-nick-wrap').hidden = Boolean(game);
     $('#f-date').min = toLocalInput(new Date());
 
     if (game) {
@@ -304,7 +299,6 @@
       $('#f-level').value = game.level;
       $('#f-desc').value = game.description;
       $('#f-contact').value = game.contact;
-      $('#f-pw').value = password || '';
       $('#detail').close();
     }
     $('#game-dialog').showModal();
@@ -344,21 +338,101 @@
     const game = state.editing;
     run($('#form-submit'), $('#form-error'), async () => {
       const values = readForm();
-      const password = $('#f-pw').value;
-      if (password.length < 4) throw new Error('비밀번호는 4자 이상이어야 합니다');
-
       if (game) {
-        await callRpc('update_game', { p_id: game.id, p_password: password, ...values });
+        await callRpc('update_game', { p_id: game.id, ...values });
         toast('모집글을 수정했습니다');
       } else {
-        const nickname = $('#f-nick').value.trim();
-        if (!nickname) throw new Error('닉네임을 입력해 주세요');
-        await callRpc('create_game', { ...values, p_nickname: nickname, p_password: password });
+        await callRpc('create_game', values);
         toast('모집글을 등록했습니다');
       }
       $('#game-dialog').close();
       await loadGames();
     });
+  });
+
+  // ── 로그인 / 회원가입 ────────────────────────────────────────
+  function renderAuth() {
+    const user = state.user;
+    $('#btn-login').hidden = Boolean(user);
+    $('#btn-logout').hidden = !user;
+    $('#user-nick').hidden = !user;
+    $('#user-nick').textContent = user ? `${user.nickname} 님` : '';
+  }
+
+  function setAuthMode(mode) {
+    state.authMode = mode;
+    const signup = mode === 'signup';
+    $('#auth-title').textContent = signup ? '회원가입' : '로그인';
+    $('#auth-submit').textContent = signup ? '가입하기' : '로그인';
+    $('#auth-switch').textContent = signup ? '이미 회원이신가요? 로그인' : '처음이신가요? 회원가입';
+    $('#a-nick-wrap').hidden = !signup;
+    $('#a-pw').autocomplete = signup ? 'new-password' : 'current-password';
+    showError($('#auth-error'), '');
+  }
+
+  function openAuth(mode, forWriting) {
+    state.writeAfterLogin = Boolean(forWriting);
+    $('#auth-form').reset();
+    $('#auth-reason').hidden = !forWriting;
+    $('#auth-info').hidden = true;
+    setAuthMode(mode);
+    $('#auth-dialog').showModal();
+  }
+
+  // 로그인 상태가 바뀌면 화면과 목록("내 글" 표시)을 갱신
+  function applyUser(user) {
+    const changed = (state.user?.email || '') !== (user?.email || '');
+    state.user = user;
+    renderAuth();
+    if (changed) loadGames();
+  }
+
+  $('#auth-switch').addEventListener('click', () => {
+    $('#auth-info').hidden = true;
+    setAuthMode(state.authMode === 'signup' ? 'login' : 'signup');
+  });
+
+  $('#auth-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    run($('#auth-submit'), $('#auth-error'), async () => {
+      const email = $('#a-email').value.trim();
+      const password = $('#a-pw').value;
+      if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('이메일 주소를 정확히 입력해 주세요');
+      if (password.length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다');
+
+      if (state.authMode === 'signup') {
+        const nickname = $('#a-nick').value.trim();
+        if (!nickname) throw new Error('닉네임을 입력해 주세요');
+        const { needsConfirm } = await auth.signUp(email, password, nickname);
+        if (needsConfirm) {
+          // 이메일 인증을 켜 둔 경우: 메일의 링크를 눌러야 로그인됨
+          setAuthMode('login');
+          $('#a-pw').value = '';
+          $('#auth-info').textContent = `${email} 로 인증 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.`;
+          $('#auth-info').hidden = false;
+          return;
+        }
+        toast('가입을 환영합니다!');
+      } else {
+        await auth.signIn(email, password);
+        toast('로그인했습니다');
+      }
+
+      applyUser(await auth.getUser());
+      $('#auth-dialog').close();
+      if (state.writeAfterLogin) openForm();
+    });
+  });
+
+  $('#btn-login').addEventListener('click', () => openAuth('login', false));
+  $('#btn-logout').addEventListener('click', async () => {
+    try {
+      await auth.signOut();
+      applyUser(null);
+      toast('로그아웃했습니다');
+    } catch (err) {
+      toast(err.message);
+    }
   });
 
   // ── 이벤트 연결 ──────────────────────────────────────────────
@@ -389,7 +463,18 @@
     if (!document.hidden && !document.querySelector('dialog[open]')) loadGames();
   });
 
-  $('#setup').hidden = isConfigured;
+  // ── 시작 ─────────────────────────────────────────────────────
+  $('#setup').hidden = !isDemo;
   $('#list').append(el('p', { class: 'empty' }, '불러오는 중…'));
-  loadGames();
+
+  (async () => {
+    try {
+      state.user = await auth.getUser();   // 저장된 로그인 정보가 있으면 복원
+    } catch {
+      state.user = null;
+    }
+    renderAuth();
+    auth.onChange(applyUser);              // 메일 인증 링크로 돌아왔을 때, 다른 탭에서 로그아웃했을 때 등
+    await loadGames();
+  })();
 })();

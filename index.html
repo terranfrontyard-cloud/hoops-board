@@ -11,21 +11,26 @@
   <header class="site">
     <div class="wrap">
       <a class="brand" href="./"><span class="ball" aria-hidden="true"></span>훕스보드</a>
-      <button id="btn-new" class="btn primary" type="button">모집글 쓰기</button>
+      <div class="head-actions">
+        <span id="user-nick" class="user-nick" hidden></span>
+        <button id="btn-login" class="btn" type="button">로그인</button>
+        <button id="btn-logout" class="btn" type="button" hidden>로그아웃</button>
+        <button id="btn-new" class="btn primary" type="button">모집글 쓰기</button>
+      </div>
     </div>
   </header>
 
   <main class="wrap">
     <section id="setup" class="notice" hidden>
       <strong>예시 데이터로 보는 중입니다.</strong>
-      <p>아직 Supabase가 연결되지 않아 저장되지 않는 예시 화면입니다.
-        <code>supabase/001_hoops_schema.sql</code>을 Supabase SQL Editor에서 실행하고,
-        <code>js/config.js</code>에 Project URL과 anon 키를 넣으면 실제 게시판으로 바뀝니다.</p>
+      <p>저장되지 않는 예시 화면입니다. 아무 이메일과 비밀번호로 가입·로그인해 볼 수 있습니다.
+        실제 게시판으로 쓰려면 <code>supabase</code> 폴더의 SQL 두 개를 Supabase SQL Editor에서 순서대로 실행하고,
+        <code>js/config.js</code>에 Project URL과 anon 키를 넣으세요.</p>
     </section>
 
     <section class="hero">
       <h1>대관은 했는데, 10명이 안 채워졌나요?</h1>
-      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 가입 없이 닉네임과 비밀번호만 있으면 됩니다.</p>
+      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 모집글은 회원만 쓸 수 있고, 참가 신청은 가입 없이 할 수 있습니다.</p>
     </section>
 
     <div class="toolbar">
@@ -104,19 +109,38 @@
       <label>연락 수단
         <input id="f-contact" maxlength="200" placeholder="오픈채팅 링크 등 (모두에게 공개됩니다)">
       </label>
-      <div class="row">
-        <label id="f-nick-wrap">닉네임
-          <input id="f-nick" maxlength="20" autocomplete="nickname">
-        </label>
-        <label><span id="f-pw-label">비밀번호 (수정·삭제용)</span>
-          <input id="f-pw" type="password" minlength="4" required autocomplete="off">
-        </label>
-      </div>
-
       <p id="form-error" class="errors" hidden></p>
       <div class="actions">
         <button type="button" class="btn" data-close>취소</button>
         <button id="form-submit" type="submit" class="btn primary">등록</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 로그인 / 회원가입 -->
+  <dialog id="auth-dialog" aria-labelledby="auth-title">
+    <form id="auth-form" novalidate>
+      <div class="dialog-head">
+        <h2 id="auth-title">로그인</h2>
+        <button type="button" class="icon-btn" data-close aria-label="닫기">✕</button>
+      </div>
+      <p id="auth-reason" class="hint" hidden>모집글을 쓰려면 로그인이 필요합니다.</p>
+
+      <label>이메일
+        <input id="a-email" type="email" required autocomplete="email" placeholder="you@example.com">
+      </label>
+      <label>비밀번호
+        <input id="a-pw" type="password" required minlength="6" autocomplete="current-password" placeholder="6자 이상">
+      </label>
+      <label id="a-nick-wrap" hidden>닉네임
+        <input id="a-nick" maxlength="20" autocomplete="nickname" placeholder="모집글에 표시되는 이름">
+      </label>
+
+      <p id="auth-error" class="errors" hidden></p>
+      <p id="auth-info" class="hint" hidden></p>
+      <div class="actions">
+        <button id="auth-switch" type="button" class="btn link">처음이신가요? 회원가입</button>
+        <button id="auth-submit" type="submit" class="btn primary">로그인</button>
       </div>
     </form>
   </dialog>
