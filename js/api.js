@@ -22,7 +22,7 @@
   function toKoreanMessage(error) {
     // 함수가 없을 때: SQL을 아직 실행하지 않은 경우가 대부분
     if (error.code === 'PGRST202' || error.code === 'PGRST203') {
-      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001~005)을 순서대로 모두 실행했는지 확인해 주세요.';
+      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001~006)을 순서대로 모두 실행했는지 확인해 주세요.';
     }
     // 로그인하지 않은 채 회원 전용 함수를 부른 경우
     if (error.code === '42501') return '로그인이 필요합니다.';
@@ -133,9 +133,13 @@
     }
   });
   const needLogin = () => mock.user || fail('로그인이 필요합니다');
+  // 예시 모드에서는 admin@test.com 으로 가입하면 관리자
+  const mockIsAdmin = () => Boolean(mock.user && mock.user.email === 'admin@test.com');
   const myGame = (id) => {
     const me = needLogin();
-    return mock.games.find((g) => g.id === id && g.owner === me.email) || fail('내가 쓴 모집글만 관리할 수 있습니다');
+    const g = mock.games.find((x) => x.id === id) || fail('모집글을 찾을 수 없습니다');
+    if (g.owner !== me.email && !mockIsAdmin()) fail('내가 쓴 모집글만 관리할 수 있습니다');
+    return g;
   };
   const gameFields = (p) => ({
     game_type: ['5v5', '3v3'].includes(p.p_game_type) ? p.p_game_type : fail('게임 종류 값이 올바르지 않습니다'),
@@ -150,9 +154,11 @@
         ...g, joined_count: countSide(g.id, 'host') + countSide(g.id, 'guest'),
         host_count: countSide(g.id, 'host'), guest_count: countSide(g.id, 'guest'), side_max: sideMax(g),
         is_mine: Boolean(mock.user && owner === mock.user.email),
+        can_manage: Boolean(mock.user && owner === mock.user.email) || mockIsAdmin(),
         i_joined: Boolean(mock.user && mock.participants.some((x) => x.game_id === g.id && x.user === mock.user.email)),
       }))
       .sort((a, b) => new Date(a.game_at) - new Date(b.game_at)),
+    is_admin: () => mockIsAdmin(),
     list_participants: (p) => mock.participants
       .filter((x) => x.game_id === p.p_game_id)
       .map(({ user, game_id, ...rest }) => ({ ...rest, side: sideOf(rest), is_me: Boolean(mock.user && user === mock.user.email) })),

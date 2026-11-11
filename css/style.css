@@ -250,3 +250,5 @@ details.panel[open] > summary { margin-bottom: 4px; }
 .side .roster li { min-height: 42px; background: var(--surface); }
 .side .roster li.host { background: var(--accent-soft); }
 .side .roster li.free { background: none; }
+
+.badge.admin { background: var(--ink); color: var(--bg); }

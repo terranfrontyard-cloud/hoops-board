@@ -32,6 +32,7 @@
     games: [], filter: 'open', query: '',
     editing: null,        // 수정 중인 모집글 (새 글이면 null)
     user: null,           // 로그인한 회원 { email, nickname }
+    isAdmin: false,       // 관리자 여부 (표시용. 실제 권한은 서버가 검사)
     authMode: 'login',    // 'login' | 'signup'
     afterLogin: null,     // 로그인에 성공하면 이어서 실행할 동작
   };
@@ -238,7 +239,7 @@
       el('div', { class: 'section-title' }, '참가 명단', el('span', null, `${s.filled} / ${s.total}명`)),
       loadError && el('p', { class: 'errors' }, loadError),
       roster,
-      g.is_mine && hostPanel(g, people, s),   // 내가 쓴 글에만 관리 메뉴 표시
+      canManage(g) && hostPanel(g, people, s),   // 글 주인과 관리자에게만 관리 메뉴 표시
       // 내 글이면 신청 불가, 이미 신청했으면 취소, 그 외에는 신청
       g.is_mine ? null
         : g.i_joined ? leavePanel(g)
@@ -292,7 +293,10 @@
       err);
   }
 
-  // 글 주인(로그인한 회원)에게만 보이는 관리 메뉴. 권한은 서버에서 다시 검사함
+  // 이 글을 관리할 수 있는지: 내 글이거나 관리자 (006 SQL 실행 전에는 내 글만)
+  const canManage = (g) => (g.can_manage == null ? Boolean(g.is_mine) : g.can_manage);
+
+  // 글 주인과 관리자에게만 보이는 관리 메뉴. 권한은 서버에서 다시 검사함
   function hostPanel(g, people, s) {
     const err = el('p', { class: 'errors', hidden: true });
 
@@ -356,7 +360,8 @@
     }
 
     return el('div', { class: 'panel' },
-      el('h3', null, '내 모집글 관리'),
+      el('h3', null, g.is_mine ? '내 모집글 관리' : '관리자 메뉴'),
+      !g.is_mine && el('p', { class: 'hint' }, `관리자 권한으로 ${g.host_nickname} 님의 글을 관리합니다.`),
       el('div', { class: 'inline' }, editBtn, closeBtn, delBtn),
       el('h3', null, '참가 명단에 추가'),
       addForm,
@@ -459,6 +464,17 @@
     $('#btn-logout').hidden = !user;
     $('#user-nick').hidden = !user;
     $('#user-nick').textContent = user ? `${user.nickname} 님` : '';
+    $('#admin-badge').hidden = !(user && state.isAdmin);
+  }
+
+  // 로그인한 사람이 관리자인지 서버에 물어봄 (실패하면 일반 회원으로 취급)
+  async function fetchIsAdmin(user) {
+    if (!user) return false;
+    try {
+      return Boolean(await callRpc('is_admin'));
+    } catch {
+      return false;
+    }
   }
 
   function setAuthMode(mode) {
@@ -483,11 +499,15 @@
   }
 
   // 로그인 상태가 바뀌면 화면과 목록("내 글" 표시)을 갱신
-  function applyUser(user) {
+  async function applyUser(user) {
     const changed = (state.user?.email || '') !== (user?.email || '');
     state.user = user;
+    if (!changed) return;
+    state.isAdmin = false;
     renderAuth();
-    return changed ? loadGames() : Promise.resolve();
+    state.isAdmin = await fetchIsAdmin(user);
+    renderAuth();
+    await loadGames();
   }
 
   $('#auth-switch').addEventListener('click', () => {
@@ -587,6 +607,7 @@
     } catch {
       state.user = null;
     }
+    state.isAdmin = await fetchIsAdmin(state.user);
     renderAuth();
     auth.onChange(applyUser);              // 메일 인증 링크로 돌아왔을 때, 다른 탭에서 로그아웃했을 때 등
     await loadGames();

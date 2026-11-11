@@ -13,6 +13,7 @@
       <a class="brand" href="./"><span class="ball" aria-hidden="true"></span>훕스보드</a>
       <div class="head-actions">
         <span id="user-nick" class="user-nick" hidden></span>
+        <span id="admin-badge" class="badge admin" hidden>관리자</span>
         <button id="btn-login" class="btn" type="button">로그인</button>
         <button id="btn-logout" class="btn" type="button" hidden>로그아웃</button>
         <button id="btn-new" class="btn primary" type="button">모집글 쓰기</button>
@@ -23,7 +24,7 @@
   <main class="wrap">
     <section id="setup" class="notice" hidden>
       <strong>예시 데이터로 보는 중입니다.</strong>
-      <p>저장되지 않는 예시 화면입니다. 아무 이메일과 비밀번호로 가입·로그인해 볼 수 있습니다.
+      <p>저장되지 않는 예시 화면입니다. 아무 이메일과 비밀번호로 가입·로그인해 볼 수 있습니다. <code>admin@test.com</code>으로 가입하면 관리자 화면을 볼 수 있습니다.
         실제 게시판으로 쓰려면 <code>supabase</code> 폴더의 SQL 파일을 Supabase SQL Editor에서 순서대로 실행하고,
         <code>js/config.js</code>에 Project URL과 anon 키를 넣으세요.</p>
     </section>
