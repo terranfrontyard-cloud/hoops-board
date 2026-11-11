@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>훕스보드 · 5:5 농구 게임 모집</title>
+  <meta name="description" content="체육관을 대관한 사람이 5:5 게임 인원을 모으는 게시판">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="./"><span class="ball" aria-hidden="true"></span>훕스보드</a>
+      <button id="btn-new" class="btn primary" type="button">모집글 쓰기</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="setup" class="notice" hidden>
+      <strong>예시 데이터로 보는 중입니다.</strong>
+      <p>아직 Supabase가 연결되지 않아 저장되지 않는 예시 화면입니다.
+        <code>supabase/001_hoops_schema.sql</code>을 Supabase SQL Editor에서 실행하고,
+        <code>js/config.js</code>에 Project URL과 anon 키를 넣으면 실제 게시판으로 바뀝니다.</p>
+    </section>
+
+    <section class="hero">
+      <h1>대관은 했는데, 10명이 안 채워졌나요?</h1>
+      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 가입 없이 닉네임과 비밀번호만 있으면 됩니다.</p>
+    </section>
+
+    <div class="toolbar">
+      <nav class="tabs" aria-label="목록 필터">
+        <button type="button" data-filter="open" class="current">모집중</button>
+        <button type="button" data-filter="all">전체</button>
+      </nav>
+      <input id="search" type="search" placeholder="지역·체육관 검색" aria-label="지역·체육관 검색">
+    </div>
+
+    <p id="list-error" class="errors" hidden></p>
+    <div id="list" class="list" aria-live="polite"></div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">비밀번호는 암호화되어 보관됩니다. 연락처 등 개인정보는 공개 범위에 유의해 주세요.</div>
+  </footer>
+
+  <!-- 상세 보기: 내용은 js/app.js가 채웁니다 -->
+  <dialog id="detail" aria-labelledby="detail-title"></dialog>
+
+  <!-- 모집글 쓰기 / 수정 -->
+  <dialog id="game-dialog" aria-labelledby="form-title">
+    <form id="game-form" novalidate>
+      <div class="dialog-head">
+        <h2 id="form-title">모집글 쓰기</h2>
+        <button type="button" class="icon-btn" data-close aria-label="닫기">✕</button>
+      </div>
+
+      <label>제목
+        <input id="f-title" required minlength="2" maxlength="60" placeholder="예) 토요일 저녁 5:5 4명 구합니다">
+      </label>
+      <div class="row">
+        <label>체육관
+          <input id="f-gym" required maxlength="40" placeholder="예) 마포구민체육센터">
+        </label>
+        <label>지역
+          <input id="f-region" maxlength="60" placeholder="예) 서울 마포구">
+        </label>
+      </div>
+      <div class="row">
+        <label>경기 일시
+          <input id="f-date" type="datetime-local" required>
+        </label>
+        <label>진행 시간
+          <select id="f-duration">
+            <option value="60">1시간</option>
+            <option value="90">1시간 30분</option>
+            <option value="120" selected>2시간</option>
+            <option value="150">2시간 30분</option>
+            <option value="180">3시간</option>
+            <option value="240">4시간</option>
+          </select>
+        </label>
+      </div>
+      <div class="row three">
+        <label>정원
+          <input id="f-capacity" type="number" inputmode="numeric" min="2" max="30" value="10" required>
+        </label>
+        <label>확보된 인원
+          <input id="f-reserved" type="number" inputmode="numeric" min="0" max="30" value="1" required>
+        </label>
+        <label>1인 참가비(원)
+          <input id="f-fee" type="number" inputmode="numeric" min="0" max="1000000" step="500" value="0" required>
+        </label>
+      </div>
+      <p class="hint">확보된 인원은 본인을 포함해 이미 오기로 한 사람 수입니다. 나머지 자리만 모집됩니다.</p>
+      <label>실력 수준
+        <select id="f-level">
+          <option>무관</option><option>초보</option><option>중수</option><option>고수</option>
+        </select>
+      </label>
+      <label>설명
+        <textarea id="f-desc" rows="4" maxlength="1000" placeholder="주차, 샤워, 준비물, 경기 방식 등"></textarea>
+      </label>
+      <label>연락 수단
+        <input id="f-contact" maxlength="200" placeholder="오픈채팅 링크 등 (모두에게 공개됩니다)">
+      </label>
+      <div class="row">
+        <label id="f-nick-wrap">닉네임
+          <input id="f-nick" maxlength="20" autocomplete="nickname">
+        </label>
+        <label><span id="f-pw-label">비밀번호 (수정·삭제용)</span>
+          <input id="f-pw" type="password" minlength="4" required autocomplete="off">
+        </label>
+      </div>
+
+      <p id="form-error" class="errors" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" data-close>취소</button>
+        <button id="form-submit" type="submit" class="btn primary">등록</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
