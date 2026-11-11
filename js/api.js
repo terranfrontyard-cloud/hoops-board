@@ -22,7 +22,7 @@
   function toKoreanMessage(error) {
     // 함수가 없을 때: SQL을 아직 실행하지 않은 경우가 대부분
     if (error.code === 'PGRST202' || error.code === 'PGRST203') {
-      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001, 002, 003)을 순서대로 모두 실행했는지 확인해 주세요.';
+      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001~004)을 순서대로 모두 실행했는지 확인해 주세요.';
     }
     // 로그인하지 않은 채 회원 전용 함수를 부른 경우
     if (error.code === '42501') return '로그인이 필요합니다.';
@@ -94,18 +94,22 @@
     users: new Map(),     // email → { password, nickname }
     listeners: [],
     games: [
-      { id: 1, title: '토요일 저녁 5:5 풀코트, 4명 구합니다', gym_name: '마포구민체육센터', region: '서울 마포구',
+      { id: 1, game_type: '5v5', title: '토요일 저녁 5:5 풀코트, 4명 구합니다', gym_name: '마포구민체육센터', region: '서울 마포구',
         game_at: hoursFromNow(30), duration_min: 120, capacity: 10, reserved_count: 6, fee: 8000, level: '중수',
         description: '주차 2시간 무료, 샤워실 있습니다.\n조끼는 준비해 둘게요. 실내화 꼭 챙겨 주세요.',
         contact: 'https://open.kakao.com/o/example', host_nickname: '대관왕', is_closed: false,
         created_at: hoursFromNow(-5), owner: 'host1@example.com' },
-      { id: 2, title: '평일 퇴근 후 가볍게 뛰실 분', gym_name: '성남 종합운동장 실내체육관', region: '경기 성남시',
+      { id: 2, game_type: '5v5', title: '평일 퇴근 후 가볍게 뛰실 분', gym_name: '성남 종합운동장 실내체육관', region: '경기 성남시',
         game_at: hoursFromNow(52), duration_min: 90, capacity: 10, reserved_count: 7, fee: 5000, level: '초보',
         description: '초보 환영합니다. 승패보다 즐겁게 뛰는 분위기예요.', contact: '', host_nickname: '점프슛',
         is_closed: false, created_at: hoursFromNow(-20), owner: 'host2@example.com' },
-      { id: 3, title: '일요일 오전 3파전 (15명)', gym_name: '해운대 스포츠센터', region: '부산 해운대구',
+      { id: 3, game_type: '5v5', title: '일요일 오전 3파전 (15명)', gym_name: '해운대 스포츠센터', region: '부산 해운대구',
         game_at: hoursFromNow(100), duration_min: 180, capacity: 15, reserved_count: 5, fee: 10000, level: '고수',
         description: '', contact: '', host_nickname: '센텀', is_closed: false, created_at: hoursFromNow(-2), owner: 'host3@example.com' },
+      { id: 4, game_type: '3v3', title: '점심시간 반코트 3:3 두 분 구해요', gym_name: '한강공원 농구장', region: '서울 영등포구',
+        game_at: hoursFromNow(20), duration_min: 60, capacity: 6, reserved_count: 3, fee: 0, level: '무관',
+        description: '야외 코트라 비 오면 취소합니다.', contact: '', host_nickname: '하프코트', is_closed: false,
+        created_at: hoursFromNow(-6), owner: 'host4@example.com' },
     ],
     participants: [
       { id: 11, game_id: 1, nickname: '3점슈터', pos: '가드', user: 'p1@example.com', created_at: hoursFromNow(-3) },
@@ -113,6 +117,7 @@
       { id: 13, game_id: 2, nickname: '농린이', pos: '무관', user: 'p3@example.com', created_at: hoursFromNow(-9) },
       { id: 14, game_id: 2, nickname: '패스마스터', pos: '가드', user: 'p4@example.com', created_at: hoursFromNow(-8) },
       { id: 15, game_id: 2, nickname: '골밑', pos: '포워드', user: 'p5@example.com', created_at: hoursFromNow(-1) },
+      { id: 16, game_id: 4, nickname: '스트릿볼', pos: '가드', user: 'p6@example.com', created_at: hoursFromNow(-4) },
     ],
   };
   const fail = (msg) => { throw new Error(msg); };
@@ -123,6 +128,7 @@
     return mock.games.find((g) => g.id === id && g.owner === me.email) || fail('내가 쓴 모집글만 관리할 수 있습니다');
   };
   const gameFields = (p) => ({
+    game_type: ['5v5', '3v3'].includes(p.p_game_type) ? p.p_game_type : fail('게임 종류 값이 올바르지 않습니다'),
     title: p.p_title.trim(), gym_name: p.p_gym_name.trim(), region: (p.p_region || '').trim(),
     game_at: p.p_game_at, duration_min: p.p_duration_min, capacity: p.p_capacity,
     reserved_count: p.p_reserved_count, fee: p.p_fee, level: p.p_level,

@@ -123,9 +123,28 @@ textarea { resize: vertical; }
   background: var(--warn-soft); font-size: 14px;
 }
 .notice code { font-size: 13px; padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.hero { padding: 28px 0 20px; }
-.hero h1 { font-size: clamp(22px, 5.2vw, 32px); line-height: 1.25; letter-spacing: -0.03em; text-wrap: balance; }
+.boards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.boards button {
+  appearance: none; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--muted); font: inherit;
+}
+.boards button b { font-size: 17px; letter-spacing: -0.02em; color: var(--ink); }
+.boards button span { font-size: 13px; }
+.boards button:hover { border-color: var(--muted); }
+.boards button.current { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.boards button.current b { color: var(--accent); }
+
+.hero { padding: 14px 0 20px; }
+.hero img {
+  display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover;
+  border-radius: var(--radius); border: 1px solid var(--line); background: var(--off-soft);
+}
+@media (min-width: 700px) { .hero img { aspect-ratio: 21 / 9; } }
+.hero h1 { margin-top: 16px; font-size: clamp(22px, 5.2vw, 32px); line-height: 1.25; letter-spacing: -0.03em; text-wrap: balance; }
 .hero p { margin-top: 8px; color: var(--muted); }
+.hero p.hint { margin-top: 4px; }
 
 /* ── 도구줄 ────────────────────────────────── */
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }

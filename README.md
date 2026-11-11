@@ -5,6 +5,7 @@
 
 ## 기능
 
+- **게시판 두 개**: 풀코트 5:5(기본 정원 10명)와 반코트 3:3(기본 정원 6명). 주소 끝의 `#5v5` / `#3v3`로 바로 열 수 있음
 - **회원가입 / 로그인**: 이메일 + 비밀번호 + 닉네임 (Supabase Auth)
 - **모집글 (회원 전용)**: 체육관, 지역, 일시, 정원(기본 10명), 이미 확보된 인원, 참가비, 실력 수준, 연락 수단
 - **내 모집글 관리**: 글쓴 회원만 수정 / 모집 마감·재개 / 삭제 / 신청자 내보내기
@@ -21,6 +22,7 @@
    - `supabase/001_hoops_schema.sql`: 테이블, 보안(RLS), 함수
    - `supabase/002_auth_required.sql`: 모집글 쓰기를 회원 전용으로 변경
    - `supabase/003_join_requires_login.sql`: 참가 신청도 회원 전용으로 변경
+   - `supabase/004_game_type.sql`: 게시판을 풀코트 5:5 / 반코트 3:3으로 구분
 3. **연결 정보 입력**: `js/config.js`에 Project URL과 anon(publishable) 키를 넣습니다.
    - Supabase → Project Settings → API 에서 확인
    - `service_role`(secret) 키는 절대 넣지 마세요.
@@ -43,10 +45,14 @@ hoops-board/
 ├─ js/config.js                      Supabase URL / anon 키  ← 직접 입력
 ├─ js/api.js                         Supabase 함수 호출 + 로그인 + 예시 모드
 ├─ js/app.js                         목록·상세·폼·로그인 화면 동작
+├─ images/                           게시판 배너 그림 (Gemini 이미지 모델로 생성)
+│  ├─ fullcourt-5v5.jpg              풀코트 5:5 (10명)
+│  └─ halfcourt-3v3.jpg              반코트 3:3 (6명)
 └─ supabase/
    ├─ 001_hoops_schema.sql           테이블, 보안(RLS), 함수
    ├─ 002_auth_required.sql          모집글 쓰기를 회원 전용으로 변경
-   └─ 003_join_requires_login.sql    참가 신청도 회원 전용으로 변경
+   ├─ 003_join_requires_login.sql    참가 신청도 회원 전용으로 변경
+   └─ 004_game_type.sql              게시판을 풀코트 5:5 / 반코트 3:3으로 구분
 ```
 
 ## 보안 구조

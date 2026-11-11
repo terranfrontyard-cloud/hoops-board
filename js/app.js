@@ -7,7 +7,28 @@
   const $ = (sel) => document.querySelector(sel);
 
   const POSITIONS = ['무관', '가드', '포워드', '센터'];
+
+  // 게시판 두 개: 풀코트 5:5 / 반코트 3:3
+  const BOARDS = {
+    '5v5': {
+      label: '풀코트 5:5', capacity: 10,
+      img: 'images/fullcourt-5v5.jpg',
+      alt: '풀코트에서 흰색 팀 5명과 주황색 팀 5명이 5:5 경기를 하는 그림',
+      title: '대관은 했는데, 10명이 안 채워졌나요?',
+      desc: '풀코트 5:5 게임 인원을 모으는 게시판입니다.',
+    },
+    '3v3': {
+      label: '반코트 3:3', capacity: 6,
+      img: 'images/halfcourt-3v3.jpg',
+      alt: '반코트에서 흰색 팀 3명과 주황색 팀 3명이 3:3 경기를 하는 그림',
+      title: '반코트 3:3, 6명만 모이면 됩니다',
+      desc: '반코트 3:3 게임 인원을 모으는 게시판입니다.',
+    },
+  };
+  const boardOf = (g) => (BOARDS[g.game_type] ? g.game_type : '5v5');   // 종류가 없는 예전 글은 5:5
+
   const state = {
+    board: BOARDS[location.hash.slice(1)] ? location.hash.slice(1) : '5v5',
     games: [], filter: 'open', query: '',
     editing: null,        // 수정 중인 모집글 (새 글이면 null)
     user: null,           // 로그인한 회원 { email, nickname }
@@ -90,6 +111,7 @@
   function renderList() {
     const q = state.query.trim().toLowerCase();
     const rows = state.games
+      .filter((g) => boardOf(g) === state.board)
       .map((g) => ({ g, s: statusOf(g) }))
       .filter(({ s }) => state.filter === 'all' || isJoinable(s))
       .filter(({ g }) => !q || `${g.region} ${g.gym_name} ${g.title}`.toLowerCase().includes(q));
@@ -103,8 +125,28 @@
     if (!list.children.length) {
       list.append(el('p', { class: 'empty' },
         q ? '검색 결과가 없습니다.' :
-        state.filter === 'open' ? '지금 모집 중인 게임이 없습니다. 첫 모집글을 올려 보세요!' : '등록된 모집글이 없습니다.'));
+        state.filter === 'open'
+          ? `지금 모집 중인 ${BOARDS[state.board].label} 게임이 없습니다. 첫 모집글을 올려 보세요!`
+          : `등록된 ${BOARDS[state.board].label} 모집글이 없습니다.`));
     }
+  }
+
+  // 게시판(5:5 / 3:3)을 바꾸면 탭, 사진, 문구, 목록을 함께 바꿈
+  function setBoard(board) {
+    state.board = board;
+    const info = BOARDS[board];
+    document.querySelectorAll('.boards button').forEach((b) => {
+      const on = b.dataset.board === board;
+      b.classList.toggle('current', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const img = $('#hero-img');
+    if (img.getAttribute('src') !== info.img) img.setAttribute('src', info.img);
+    img.alt = info.alt;
+    $('#hero-title').textContent = info.title;
+    $('#hero-desc').textContent = info.desc;
+    if (location.hash.slice(1) !== board) history.replaceState(null, '', `#${board}`);
+    renderList();
   }
 
   function card(g, s) {
@@ -156,6 +198,7 @@
   function detailView(g, people, loadError) {
     const s = statusOf(g);
     const facts = el('dl', { class: 'facts' },
+      el('dt', null, '종류'), el('dd', null, BOARDS[boardOf(g)].label),
       el('dt', null, '일시'), el('dd', null, `${fmtWhen(g.game_at)} (${fmtDuration(g.duration_min)})`),
       el('dt', null, '장소'), el('dd', null, [g.gym_name, g.region].filter(Boolean).join(' · ')),
       el('dt', null, '참가비'), el('dd', null, fmtFee(g.fee)),
@@ -291,6 +334,10 @@
     $('#form-submit').textContent = game ? '수정 저장' : '등록';
     $('#f-date').min = toLocalInput(new Date());
 
+    // 새 글은 지금 보고 있는 게시판 종류와 그 정원(10명 / 6명)으로 시작
+    $('#f-type').value = game ? boardOf(game) : state.board;
+    $('#f-capacity').value = BOARDS[$('#f-type').value].capacity;
+
     if (game) {
       $('#f-title').value = game.title;
       $('#f-gym').value = game.gym_name;
@@ -316,6 +363,7 @@
     const dateValue = $('#f-date').value;
     const num = (sel) => Number($(sel).value);
     const v = {
+      p_game_type: $('#f-type').value,
       p_title: $('#f-title').value.trim(),
       p_gym_name: $('#f-gym').value.trim(),
       p_region: $('#f-region').value.trim(),
@@ -355,7 +403,13 @@
       }
       $('#game-dialog').close();
       await loadGames();
+      setBoard(values.p_game_type);   // 방금 쓴 글이 있는 게시판으로 이동
     });
+  });
+
+  // 게임 종류를 바꾸면 정원을 그 종류의 기본값(10명 / 6명)으로 맞춤
+  $('#f-type').addEventListener('change', (e) => {
+    $('#f-capacity').value = BOARDS[e.target.value].capacity;
   });
 
   // ── 로그인 / 회원가입 ────────────────────────────────────────
@@ -449,6 +503,14 @@
   // ── 이벤트 연결 ──────────────────────────────────────────────
   $('#btn-new').addEventListener('click', () => openForm());
 
+  document.querySelectorAll('.boards button').forEach((btn) => {
+    btn.addEventListener('click', () => setBoard(btn.dataset.board));
+  });
+  window.addEventListener('hashchange', () => {
+    const board = location.hash.slice(1);
+    if (BOARDS[board] && board !== state.board) setBoard(board);
+  });
+
   document.querySelectorAll('.tabs button').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.filter = btn.dataset.filter;
@@ -476,7 +538,8 @@
 
   // ── 시작 ─────────────────────────────────────────────────────
   $('#setup').hidden = !isDemo;
-  $('#list').append(el('p', { class: 'empty' }, '불러오는 중…'));
+  setBoard(state.board);
+  $('#list').replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
 
   (async () => {
     try {

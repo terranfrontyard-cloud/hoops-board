@@ -28,9 +28,18 @@
         <code>js/config.js</code>에 Project URL과 anon 키를 넣으세요.</p>
     </section>
 
+    <!-- 게시판 선택: 풀코트 5:5 / 반코트 3:3 -->
+    <nav class="boards" aria-label="게시판 선택">
+      <button type="button" data-board="5v5" class="current"><b>풀코트 5:5</b><span>10명이 뛰는 올코트 게임</span></button>
+      <button type="button" data-board="3v3"><b>반코트 3:3</b><span>6명이 뛰는 하프코트 게임</span></button>
+    </nav>
+
     <section class="hero">
-      <h1>대관은 했는데, 10명이 안 채워졌나요?</h1>
-      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 모집글 쓰기와 참가 신청은 회원만 할 수 있습니다. 가입은 이메일만 있으면 됩니다.</p>
+      <img id="hero-img" src="images/fullcourt-5v5.jpg" width="1376" height="768"
+           alt="풀코트에서 흰색 팀 5명과 주황색 팀 5명이 5:5 경기를 하는 그림">
+      <h1 id="hero-title">대관은 했는데, 10명이 안 채워졌나요?</h1>
+      <p id="hero-desc">풀코트 5:5 게임 인원을 모으는 게시판입니다.</p>
+      <p class="hint">모집글 쓰기와 참가 신청은 회원만 할 수 있습니다. 가입은 이메일만 있으면 됩니다.</p>
     </section>
 
     <div class="toolbar">
@@ -60,6 +69,12 @@
         <button type="button" class="icon-btn" data-close aria-label="닫기">✕</button>
       </div>
 
+      <label>게임 종류
+        <select id="f-type">
+          <option value="5v5">풀코트 5:5 (10명)</option>
+          <option value="3v3">반코트 3:3 (6명)</option>
+        </select>
+      </label>
       <label>제목
         <input id="f-title" required minlength="2" maxlength="60" placeholder="예) 토요일 저녁 5:5 4명 구합니다">
       </label>
