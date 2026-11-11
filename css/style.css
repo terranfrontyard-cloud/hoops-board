@@ -239,3 +239,14 @@ details.panel[open] > summary { margin-bottom: 4px; }
   background: var(--ink); color: var(--bg); font-weight: 600; font-size: 14px;
   box-shadow: 0 6px 24px #0005;
 }
+
+/* ── 명단: 주최측 / 게스트측 ───────────────── */
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.side { padding: 10px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.side.host { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.side-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 14px; font-weight: 700; }
+.side-title span { color: var(--muted); font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+.side .roster { grid-template-columns: 1fr; }
+.side .roster li { min-height: 42px; background: var(--surface); }
+.side .roster li.host { background: var(--accent-soft); }
+.side .roster li.free { background: none; }

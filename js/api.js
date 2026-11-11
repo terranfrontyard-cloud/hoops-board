@@ -22,7 +22,7 @@
   function toKoreanMessage(error) {
     // 함수가 없을 때: SQL을 아직 실행하지 않은 경우가 대부분
     if (error.code === 'PGRST202' || error.code === 'PGRST203') {
-      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001~004)을 순서대로 모두 실행했는지 확인해 주세요.';
+      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001~005)을 순서대로 모두 실행했는지 확인해 주세요.';
     }
     // 로그인하지 않은 채 회원 전용 함수를 부른 경우
     if (error.code === '42501') return '로그인이 필요합니다.';
@@ -121,7 +121,17 @@
     ],
   };
   const fail = (msg) => { throw new Error(msg); };
-  const joinedOf = (id) => mock.participants.filter((p) => p.game_id === id).length;
+  const sideMax = (g) => (g.game_type === '3v3' ? 3 : 5);
+  const sideOf = (p) => p.side || 'guest';
+  const countSide = (id, side) => mock.participants.filter((p) => p.game_id === id && sideOf(p) === side).length;
+  // 예시 글마다 주최측 명단 채우기: [글 번호, 주최측 인원]
+  [[1, 4], [2, 5], [3, 2], [4, 2]].forEach(([gameId, n]) => {
+    const g = mock.games.find((x) => x.id === gameId);
+    for (let i = 0; i < n; i += 1) {
+      mock.participants.push({ id: ++seq, game_id: gameId, side: 'host', pos: '무관', created_at: g.created_at,
+        nickname: i === 0 ? g.host_nickname : g.host_nickname + ' 지인' + i, user: i === 0 ? g.owner : null });
+    }
+  });
   const needLogin = () => mock.user || fail('로그인이 필요합니다');
   const myGame = (id) => {
     const me = needLogin();
@@ -130,33 +140,39 @@
   const gameFields = (p) => ({
     game_type: ['5v5', '3v3'].includes(p.p_game_type) ? p.p_game_type : fail('게임 종류 값이 올바르지 않습니다'),
     title: p.p_title.trim(), gym_name: p.p_gym_name.trim(), region: (p.p_region || '').trim(),
-    game_at: p.p_game_at, duration_min: p.p_duration_min, capacity: p.p_capacity,
-    reserved_count: p.p_reserved_count, fee: p.p_fee, level: p.p_level,
+    game_at: p.p_game_at, duration_min: p.p_duration_min, fee: p.p_fee, level: p.p_level,
     description: (p.p_description || '').trim(), contact: (p.p_contact || '').trim(),
   });
 
   const mockHandlers = {
     list_games: () => mock.games
       .map(({ owner, ...g }) => ({
-        ...g, joined_count: joinedOf(g.id),
+        ...g, joined_count: countSide(g.id, 'host') + countSide(g.id, 'guest'),
+        host_count: countSide(g.id, 'host'), guest_count: countSide(g.id, 'guest'), side_max: sideMax(g),
         is_mine: Boolean(mock.user && owner === mock.user.email),
         i_joined: Boolean(mock.user && mock.participants.some((x) => x.game_id === g.id && x.user === mock.user.email)),
       }))
       .sort((a, b) => new Date(a.game_at) - new Date(b.game_at)),
     list_participants: (p) => mock.participants
       .filter((x) => x.game_id === p.p_game_id)
-      .map(({ user, game_id, ...rest }) => ({ ...rest, is_me: Boolean(mock.user && user === mock.user.email) })),
+      .map(({ user, game_id, ...rest }) => ({ ...rest, side: sideOf(rest), is_me: Boolean(mock.user && user === mock.user.email) })),
     create_game: (p) => {
       const me = needLogin();
       const g = { id: ++seq, ...gameFields(p), host_nickname: me.nickname, is_closed: false,
                   created_at: new Date().toISOString(), owner: me.email };
       mock.games.push(g);
+      // 글쓴이는 주최측 첫 번째로 자동 등록
+      mock.participants.push({ id: ++seq, game_id: g.id, side: 'host', nickname: me.nickname, pos: '무관', user: me.email, created_at: g.created_at });
       return g.id;
     },
     update_game: (p) => {
       const g = myGame(p.p_id);
-      if (p.p_reserved_count + joinedOf(g.id) > p.p_capacity) fail('이미 신청한 인원이 있어 정원을 그보다 줄일 수 없습니다');
-      Object.assign(g, gameFields(p));
+      const fields = gameFields(p);
+      const max = sideMax(fields);
+      if (countSide(g.id, 'host') > max || countSide(g.id, 'guest') > max) {
+        fail('한쪽 명단이 이미 ' + max + '명을 넘어 이 게임 종류로 바꿀 수 없습니다. 먼저 명단을 줄여 주세요');
+      }
+      Object.assign(g, fields);
     },
     delete_game: (p) => {
       const g = myGame(p.p_id);
@@ -171,8 +187,8 @@
       if (g.is_closed) fail('주최자가 모집을 마감했습니다');
       if (new Date(g.game_at) <= new Date()) fail('이미 시작했거나 끝난 경기입니다');
       if (mock.participants.some((x) => x.game_id === g.id && x.user === me.email)) fail('이미 신청한 경기입니다');
-      if (g.reserved_count + joinedOf(g.id) >= g.capacity) fail('정원이 모두 찼습니다');
-      mock.participants.push({ id: ++seq, game_id: g.id, nickname: me.nickname, pos: p.p_pos, user: me.email, created_at: new Date().toISOString() });
+      if (countSide(g.id, 'guest') >= sideMax(g)) fail('게스트측 자리가 모두 찼습니다');
+      mock.participants.push({ id: ++seq, game_id: g.id, side: 'guest', nickname: me.nickname, pos: p.p_pos, user: me.email, created_at: new Date().toISOString() });
       return seq;
     },
     leave_game: (p) => {
@@ -180,6 +196,17 @@
       const i = mock.participants.findIndex((x) => x.game_id === p.p_game_id && x.user === me.email);
       if (i < 0) fail('이 경기에 신청한 내역이 없습니다');
       mock.participants.splice(i, 1);
+    },
+    add_participant: (p) => {
+      const g = myGame(p.p_game_id);
+      const name = (p.p_nickname || '').trim();
+      if (!['host', 'guest'].includes(p.p_side)) fail('주최측 또는 게스트측을 골라 주세요');
+      if (!name || name.length > 20) fail('이름은 1자 이상 20자 이하로 입력해 주세요');
+      if (countSide(g.id, p.p_side) >= sideMax(g)) {
+        fail((p.p_side === 'host' ? '주최측' : '게스트측') + '은 최대 ' + sideMax(g) + '명까지입니다');
+      }
+      mock.participants.push({ id: ++seq, game_id: g.id, side: p.p_side, nickname: name, pos: p.p_pos, user: null, created_at: new Date().toISOString() });
+      return seq;
     },
     kick_participant: (p) => {
       myGame(p.p_game_id);

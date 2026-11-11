@@ -71,8 +71,8 @@
 
       <label>게임 종류
         <select id="f-type">
-          <option value="5v5">풀코트 5:5 (10명)</option>
-          <option value="3v3">반코트 3:3 (6명)</option>
+          <option value="5v5">풀코트 5:5 (주최측 5명 + 게스트측 5명)</option>
+          <option value="3v3">반코트 3:3 (주최측 3명 + 게스트측 3명)</option>
         </select>
       </label>
       <label>제목
@@ -101,23 +101,17 @@
           </select>
         </label>
       </div>
-      <div class="row three">
-        <label>정원
-          <input id="f-capacity" type="number" inputmode="numeric" min="2" max="30" value="10" required>
-        </label>
-        <label>확보된 인원
-          <input id="f-reserved" type="number" inputmode="numeric" min="0" max="30" value="1" required>
-        </label>
+      <div class="row">
         <label>1인 참가비(원)
           <input id="f-fee" type="number" inputmode="numeric" min="0" max="1000000" step="500" value="0" required>
         </label>
+        <label>실력 수준
+          <select id="f-level">
+            <option>무관</option><option>초보</option><option>중수</option><option>고수</option>
+          </select>
+        </label>
       </div>
-      <p class="hint">확보된 인원은 본인을 포함해 이미 오기로 한 사람 수입니다. 나머지 자리만 모집됩니다.</p>
-      <label>실력 수준
-        <select id="f-level">
-          <option>무관</option><option>초보</option><option>중수</option><option>고수</option>
-        </select>
-      </label>
+      <p id="f-size-hint" class="hint"></p>
       <label>설명
         <textarea id="f-desc" rows="4" maxlength="1000" placeholder="주차, 샤워, 준비물, 경기 방식 등"></textarea>
       </label>

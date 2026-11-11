@@ -11,14 +11,14 @@
   // 게시판 두 개: 풀코트 5:5 / 반코트 3:3
   const BOARDS = {
     '5v5': {
-      label: '풀코트 5:5', capacity: 10,
+      label: '풀코트 5:5', sideMax: 5,
       img: 'images/fullcourt-5v5.jpg',
       alt: '풀코트에서 흰색 팀 5명과 주황색 팀 5명이 5:5 경기를 하는 그림',
       title: '대관은 했는데, 10명이 안 채워졌나요?',
       desc: '풀코트 5:5 게임 인원을 모으는 게시판입니다.',
     },
     '3v3': {
-      label: '반코트 3:3', capacity: 6,
+      label: '반코트 3:3', sideMax: 3,
       img: 'images/halfcourt-3v3.jpg',
       alt: '반코트에서 흰색 팀 3명과 주황색 팀 3명이 3:3 경기를 하는 그림',
       title: '반코트 3:3, 6명만 모이면 됩니다',
@@ -59,14 +59,23 @@
   // datetime-local 입력칸은 "현지 시각" 문자열을 쓰므로 변환이 필요
   const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
+  // 명단은 주최측 / 게스트측으로 나뉘고, 한쪽 최대 인원은 5:5가 5명, 3:3이 3명.
+  // 회원의 참가 신청은 게스트측으로만 들어가므로 "모집중" 여부는 게스트측 빈자리로 판단
   function statusOf(g) {
-    const filled = g.reserved_count + g.joined_count;
-    const left = Math.max(0, g.capacity - filled);
-    if (new Date(g.game_at) <= new Date()) return { key: 'past', label: '종료', left, filled };
-    if (g.is_closed) return { key: 'closed', label: '마감', left, filled };
-    if (left === 0) return { key: 'full', label: '모집 완료', left, filled };
-    if (left <= 2) return { key: 'almost', label: `마감 임박 · ${left}자리`, left, filled };
-    return { key: 'open', label: '모집중', left, filled };
+    const max = g.side_max || BOARDS[boardOf(g)].sideMax;
+    const hostCount = g.host_count || 0;
+    const guestCount = g.guest_count || 0;
+    const base = {
+      max, hostCount, guestCount,
+      filled: hostCount + guestCount,
+      total: max * 2,
+      left: Math.max(0, max - guestCount),          // 게스트측 빈자리
+    };
+    if (new Date(g.game_at) <= new Date()) return { ...base, key: 'past', label: '종료' };
+    if (g.is_closed) return { ...base, key: 'closed', label: '마감' };
+    if (base.left === 0) return { ...base, key: 'full', label: '모집 완료' };
+    if (base.left === 1) return { ...base, key: 'almost', label: '마감 임박 · 1자리' };
+    return { ...base, key: 'open', label: '모집중' };
   }
   const isJoinable = (s) => s.key === 'open' || s.key === 'almost';
 
@@ -150,18 +159,18 @@
   }
 
   function card(g, s) {
-    const pct = Math.min(100, Math.round((s.filled / g.capacity) * 100));
+    const pct = Math.min(100, Math.round((s.filled / s.total) * 100));
     return el('button', { class: `card${isJoinable(s) ? '' : ' dim'}`, type: 'button', onclick: () => openDetail(g.id) },
       el('div', { class: 'card-top' },
         el('span', { class: 'when' }, fmtWhen(g.game_at)),
         el('span', { class: `badge ${s.key}` }, s.label)),
       el('h3', null, g.title),
       el('p', { class: 'meta' }, [g.gym_name, g.region].filter(Boolean).join(' · ')),
-      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min), g.is_mine && '내 글', g.i_joined && '신청함'].filter(Boolean).join(' · ')),
+      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min), g.is_mine && '내 글', g.i_joined && !g.is_mine && '신청함'].filter(Boolean).join(' · ')),
       el('div', { class: 'fill' },
         el('div', { class: 'fill-text' },
-          el('span', null, el('b', null, String(s.filled)), ` / ${g.capacity}명`),
-          el('span', null, s.left > 0 ? `${s.left}자리 남음` : '자리 없음')),
+          el('span', null, el('b', null, String(s.filled)), ` / ${s.total}명`),
+          el('span', null, s.left > 0 ? `게스트 ${s.left}자리 남음` : '게스트 자리 없음')),
         el('div', { class: 'bar' }, el('i', { style: `width:${pct}%` }))));
   }
 
@@ -206,11 +215,17 @@
       el('dt', null, '주최'), el('dd', null, g.host_nickname),
       g.contact && el('dt', null, '연락'), g.contact && el('dd', null, contactNode(g.contact)));
 
-    const roster = el('ul', { class: 'roster' },
-      Array.from({ length: g.reserved_count }, (_, i) =>
-        el('li', { class: 'host' }, i === 0 ? g.host_nickname : '주최 측', el('small', null, i === 0 ? '주최자' : '확보된 인원'))),
-      people.map((p) => el('li', { class: p.is_me && 'me' }, p.nickname, el('small', null, p.is_me ? `${p.pos} · 나` : p.pos))),
-      Array.from({ length: s.left }, () => el('li', { class: 'free' }, '빈자리')));
+    // 한쪽 명단: 이름들 + 남은 자리만큼 "빈자리"
+    const sideList = (side, title) => {
+      const members = people.filter((p) => (p.side || 'guest') === side);
+      return el('div', { class: `side ${side}` },
+        el('div', { class: 'side-title' }, title, el('span', null, `${members.length} / ${s.max}명`)),
+        el('ul', { class: 'roster' },
+          members.map((p) => el('li', { class: [side === 'host' && 'host', p.is_me && 'me'].filter(Boolean).join(' ') || null },
+            p.nickname, el('small', null, p.is_me ? `${p.pos} · 나` : p.pos))),
+          Array.from({ length: Math.max(0, s.max - members.length) }, () => el('li', { class: 'free' }, '빈자리'))));
+    };
+    const roster = el('div', { class: 'sides' }, sideList('host', '주최측'), sideList('guest', '게스트측'));
 
     return el('div', { class: 'detail' },
       el('div', { class: 'dialog-head' },
@@ -220,13 +235,13 @@
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': '닫기', onclick: () => $('#detail').close() }, '✕')),
       facts,
       g.description && el('p', { class: 'desc' }, g.description),
-      el('div', { class: 'section-title' }, '참가 명단', el('span', null, `${s.filled} / ${g.capacity}명`)),
+      el('div', { class: 'section-title' }, '참가 명단', el('span', null, `${s.filled} / ${s.total}명`)),
       loadError && el('p', { class: 'errors' }, loadError),
       roster,
-      g.is_mine && hostPanel(g, people),   // 내가 쓴 글에만 관리 메뉴 표시
-      // 이미 신청했으면 취소, 내 글이면 신청 불가, 그 외에는 신청
-      g.i_joined ? leavePanel(g)
-        : g.is_mine ? null
+      g.is_mine && hostPanel(g, people, s),   // 내가 쓴 글에만 관리 메뉴 표시
+      // 내 글이면 신청 불가, 이미 신청했으면 취소, 그 외에는 신청
+      g.is_mine ? null
+        : g.i_joined ? leavePanel(g)
         : isJoinable(s) ? joinPanel(g)
         : el('p', { class: 'hint' }, '지금은 참가 신청을 받지 않는 게임입니다.'));
   }
@@ -256,7 +271,7 @@
       });
     } },
       el('h3', null, '참가 신청'),
-      el('p', { class: 'hint' }, `${state.user.nickname} 님 이름으로 신청됩니다.`),
+      el('p', { class: 'hint' }, `${state.user.nickname} 님 이름으로 게스트측에 신청됩니다.`),
       el('div', { class: 'inline' }, el('label', null, '포지션', pos), btn),
       err);
   }
@@ -278,8 +293,34 @@
   }
 
   // 글 주인(로그인한 회원)에게만 보이는 관리 메뉴. 권한은 서버에서 다시 검사함
-  function hostPanel(g, people) {
+  function hostPanel(g, people, s) {
     const err = el('p', { class: 'errors', hidden: true });
+
+    // 명단에 이름 직접 추가: 주최측 / 게스트측을 골라 넣음 (한쪽 최대 s.max명)
+    const hostFull = s.hostCount >= s.max;
+    const guestFull = s.guestCount >= s.max;
+    const sideSel = el('select', null,
+      el('option', { value: 'host', disabled: hostFull }, `주최측 (${s.hostCount}/${s.max})`),
+      el('option', { value: 'guest', disabled: guestFull, selected: hostFull && !guestFull }, `게스트측 (${s.guestCount}/${s.max})`));
+    const nameInput = el('input', { maxlength: 20, required: true, placeholder: '이름 또는 닉네임' });
+    const posSel = el('select', null, POSITIONS.map((p) => el('option', null, p)));
+    const addBtn = el('button', { class: 'btn small primary', type: 'submit' }, '추가');
+    const addForm = hostFull && guestFull
+      ? el('p', { class: 'hint' }, `주최측과 게스트측이 모두 ${s.max}명으로 찼습니다.`)
+      : el('form', { class: 'inline', onsubmit: (e) => {
+          e.preventDefault();
+          run(addBtn, err, async () => {
+            if (!nameInput.value.trim()) throw new Error('이름을 입력해 주세요');
+            await callRpc('add_participant', {
+              p_game_id: g.id, p_side: sideSel.value, p_nickname: nameInput.value, p_pos: posSel.value });
+            toast(`${sideSel.value === 'host' ? '주최측' : '게스트측'}에 추가했습니다`);
+            await refresh(g.id);
+          });
+        } },
+          el('label', null, '어느 쪽', sideSel),
+          el('label', null, '이름', nameInput),
+          el('label', null, '포지션', posSel),
+          addBtn);
 
     const editBtn = el('button', { class: 'btn small', type: 'button', onclick: () => openForm(g) }, '수정');
 
@@ -302,20 +343,23 @@
 
     let kickRow = null;
     if (people.length) {
-      const select = el('select', null, people.map((p) => el('option', { value: p.id }, `${p.nickname} (${p.pos})`)));
+      const select = el('select', null, people.map((p) =>
+        el('option', { value: p.id }, `[${p.side === 'host' ? '주최측' : '게스트측'}] ${p.nickname} (${p.pos})`)));
       const kickBtn = el('button', { class: 'btn small', type: 'button', onclick: () => {
         run(kickBtn, err, async () => {
           await callRpc('kick_participant', { p_game_id: g.id, p_participant_id: Number(select.value) });
-          toast('신청자를 내보냈습니다');
+          toast('명단에서 뺐습니다');
           await refresh(g.id);
         });
-      } }, '내보내기');
-      kickRow = el('div', { class: 'inline' }, el('label', null, '신청자 내보내기', select), kickBtn);
+      } }, '명단에서 빼기');
+      kickRow = el('div', { class: 'inline' }, el('label', null, '명단에서 빼기', select), kickBtn);
     }
 
     return el('div', { class: 'panel' },
       el('h3', null, '내 모집글 관리'),
       el('div', { class: 'inline' }, editBtn, closeBtn, delBtn),
+      el('h3', null, '참가 명단에 추가'),
+      addForm,
       kickRow, err);
   }
 
@@ -334,9 +378,9 @@
     $('#form-submit').textContent = game ? '수정 저장' : '등록';
     $('#f-date').min = toLocalInput(new Date());
 
-    // 새 글은 지금 보고 있는 게시판 종류와 그 정원(10명 / 6명)으로 시작
+    // 새 글은 지금 보고 있는 게시판 종류로 시작
     $('#f-type').value = game ? boardOf(game) : state.board;
-    $('#f-capacity').value = BOARDS[$('#f-type').value].capacity;
+    renderSizeHint();
 
     if (game) {
       $('#f-title').value = game.title;
@@ -348,8 +392,6 @@
         dur.append(el('option', { value: game.duration_min }, fmtDuration(game.duration_min)));
       }
       dur.value = game.duration_min;
-      $('#f-capacity').value = game.capacity;
-      $('#f-reserved').value = game.reserved_count;
       $('#f-fee').value = game.fee;
       $('#f-level').value = game.level;
       $('#f-desc').value = game.description;
@@ -369,8 +411,6 @@
       p_region: $('#f-region').value.trim(),
       p_game_at: dateValue ? new Date(dateValue).toISOString() : null,
       p_duration_min: num('#f-duration'),
-      p_capacity: num('#f-capacity'),
-      p_reserved_count: num('#f-reserved'),
       p_fee: num('#f-fee'),
       p_level: $('#f-level').value,
       p_description: $('#f-desc').value,
@@ -381,10 +421,6 @@
     if (!v.p_gym_name) throw new Error('체육관 이름을 입력해 주세요');
     if (!v.p_game_at) throw new Error('경기 일시를 정해 주세요');
     if (new Date(v.p_game_at) <= new Date()) throw new Error('경기 일시는 지금 이후로 정해 주세요');
-    if (!Number.isInteger(v.p_capacity) || v.p_capacity < 2 || v.p_capacity > 30) throw new Error('정원은 2~30명으로 정해 주세요');
-    if (!Number.isInteger(v.p_reserved_count) || v.p_reserved_count < 0 || v.p_reserved_count > v.p_capacity) {
-      throw new Error('확보된 인원은 0명 이상, 정원 이하로 입력해 주세요');
-    }
     if (!Number.isInteger(v.p_fee) || v.p_fee < 0) throw new Error('참가비를 0 이상의 숫자로 입력해 주세요');
     return v;
   }
@@ -407,10 +443,14 @@
     });
   });
 
-  // 게임 종류를 바꾸면 정원을 그 종류의 기본값(10명 / 6명)으로 맞춤
-  $('#f-type').addEventListener('change', (e) => {
-    $('#f-capacity').value = BOARDS[e.target.value].capacity;
-  });
+  // 게임 종류에 따라 정원이 정해짐을 폼에 안내
+  function renderSizeHint() {
+    const max = BOARDS[$('#f-type').value].sideMax;
+    $('#f-size-hint').textContent =
+      `정원은 주최측 ${max}명 + 게스트측 ${max}명입니다. 글을 올리면 내가 주최측 첫 번째로 들어가고, ` +
+      '나머지 이름은 글을 연 뒤 "내 모집글 관리"에서 추가합니다.';
+  }
+  $('#f-type').addEventListener('change', renderSizeHint);
 
   // ── 로그인 / 회원가입 ────────────────────────────────────────
   function renderAuth() {
