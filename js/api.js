@@ -22,7 +22,7 @@
   function toKoreanMessage(error) {
     // 함수가 없을 때: SQL을 아직 실행하지 않은 경우가 대부분
     if (error.code === 'PGRST202' || error.code === 'PGRST203') {
-      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 001_hoops_schema.sql과 002_auth_required.sql을 순서대로 실행했는지 확인해 주세요.';
+      return '서버 함수를 찾을 수 없습니다. Supabase SQL Editor에서 supabase 폴더의 SQL 파일(001, 002, 003)을 순서대로 모두 실행했는지 확인해 주세요.';
     }
     // 로그인하지 않은 채 회원 전용 함수를 부른 경우
     if (error.code === '42501') return '로그인이 필요합니다.';
@@ -108,11 +108,11 @@
         description: '', contact: '', host_nickname: '센텀', is_closed: false, created_at: hoursFromNow(-2), owner: 'host3@example.com' },
     ],
     participants: [
-      { id: 11, game_id: 1, nickname: '3점슈터', pos: '가드', pw: '1234', created_at: hoursFromNow(-3) },
-      { id: 12, game_id: 1, nickname: '리바운더', pos: '센터', pw: '1234', created_at: hoursFromNow(-2) },
-      { id: 13, game_id: 2, nickname: '농린이', pos: '무관', pw: '1234', created_at: hoursFromNow(-9) },
-      { id: 14, game_id: 2, nickname: '패스마스터', pos: '가드', pw: '1234', created_at: hoursFromNow(-8) },
-      { id: 15, game_id: 2, nickname: '골밑', pos: '포워드', pw: '1234', created_at: hoursFromNow(-1) },
+      { id: 11, game_id: 1, nickname: '3점슈터', pos: '가드', user: 'p1@example.com', created_at: hoursFromNow(-3) },
+      { id: 12, game_id: 1, nickname: '리바운더', pos: '센터', user: 'p2@example.com', created_at: hoursFromNow(-2) },
+      { id: 13, game_id: 2, nickname: '농린이', pos: '무관', user: 'p3@example.com', created_at: hoursFromNow(-9) },
+      { id: 14, game_id: 2, nickname: '패스마스터', pos: '가드', user: 'p4@example.com', created_at: hoursFromNow(-8) },
+      { id: 15, game_id: 2, nickname: '골밑', pos: '포워드', user: 'p5@example.com', created_at: hoursFromNow(-1) },
     ],
   };
   const fail = (msg) => { throw new Error(msg); };
@@ -131,11 +131,15 @@
 
   const mockHandlers = {
     list_games: () => mock.games
-      .map(({ owner, ...g }) => ({ ...g, joined_count: joinedOf(g.id), is_mine: Boolean(mock.user && owner === mock.user.email) }))
+      .map(({ owner, ...g }) => ({
+        ...g, joined_count: joinedOf(g.id),
+        is_mine: Boolean(mock.user && owner === mock.user.email),
+        i_joined: Boolean(mock.user && mock.participants.some((x) => x.game_id === g.id && x.user === mock.user.email)),
+      }))
       .sort((a, b) => new Date(a.game_at) - new Date(b.game_at)),
     list_participants: (p) => mock.participants
       .filter((x) => x.game_id === p.p_game_id)
-      .map(({ pw, game_id, ...rest }) => rest),
+      .map(({ user, game_id, ...rest }) => ({ ...rest, is_me: Boolean(mock.user && user === mock.user.email) })),
     create_game: (p) => {
       const me = needLogin();
       const g = { id: ++seq, ...gameFields(p), host_nickname: me.nickname, is_closed: false,
@@ -155,21 +159,20 @@
     },
     set_game_closed: (p) => { myGame(p.p_id).is_closed = p.p_closed; },
     join_game: (p) => {
+      const me = needLogin();
       const g = mock.games.find((x) => x.id === p.p_game_id) || fail('모집글을 찾을 수 없습니다');
-      const nick = (p.p_nickname || '').trim();
-      if (!nick) fail('닉네임은 1자 이상 20자 이하로 입력해 주세요');
-      if ((p.p_password || '').length < 4) fail('비밀번호는 4자 이상이어야 합니다');
+      if (g.owner === me.email) fail('내가 쓴 모집글에는 신청할 수 없습니다');
       if (g.is_closed) fail('주최자가 모집을 마감했습니다');
       if (new Date(g.game_at) <= new Date()) fail('이미 시작했거나 끝난 경기입니다');
+      if (mock.participants.some((x) => x.game_id === g.id && x.user === me.email)) fail('이미 신청한 경기입니다');
       if (g.reserved_count + joinedOf(g.id) >= g.capacity) fail('정원이 모두 찼습니다');
-      if (mock.participants.some((x) => x.game_id === g.id && x.nickname === nick)) fail('이 경기에 같은 닉네임으로 이미 신청했습니다');
-      mock.participants.push({ id: ++seq, game_id: g.id, nickname: nick, pos: p.p_pos, pw: p.p_password, created_at: new Date().toISOString() });
+      mock.participants.push({ id: ++seq, game_id: g.id, nickname: me.nickname, pos: p.p_pos, user: me.email, created_at: new Date().toISOString() });
       return seq;
     },
     leave_game: (p) => {
-      const i = mock.participants.findIndex((x) =>
-        x.game_id === p.p_game_id && x.nickname === (p.p_nickname || '').trim() && x.pw === p.p_password);
-      if (i < 0) fail('신청 내역이 없거나 비밀번호가 틀렸습니다');
+      const me = needLogin();
+      const i = mock.participants.findIndex((x) => x.game_id === p.p_game_id && x.user === me.email);
+      if (i < 0) fail('이 경기에 신청한 내역이 없습니다');
       mock.participants.splice(i, 1);
     },
     kick_participant: (p) => {

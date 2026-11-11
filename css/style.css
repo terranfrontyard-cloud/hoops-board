@@ -204,6 +204,7 @@ dialog > form, dialog > .detail { display: flex; flex-direction: column; gap: 14
 }
 .roster li small { color: var(--muted); font-size: 12px; }
 .roster li.host { background: var(--accent-soft); border-color: transparent; }
+.roster li.me { border-color: var(--accent); }
 .roster li.free { border-style: dashed; color: var(--muted); }
 .panel { padding: 14px; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; }
 .panel h3 { font-size: 15px; }

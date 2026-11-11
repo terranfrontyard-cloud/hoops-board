@@ -12,7 +12,7 @@
     editing: null,        // 수정 중인 모집글 (새 글이면 null)
     user: null,           // 로그인한 회원 { email, nickname }
     authMode: 'login',    // 'login' | 'signup'
-    writeAfterLogin: false,
+    afterLogin: null,     // 로그인에 성공하면 이어서 실행할 동작
   };
 
   // ── 작은 도우미들 ─────────────────────────────────────────────
@@ -115,7 +115,7 @@
         el('span', { class: `badge ${s.key}` }, s.label)),
       el('h3', null, g.title),
       el('p', { class: 'meta' }, [g.gym_name, g.region].filter(Boolean).join(' · ')),
-      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min), g.is_mine && '내 글'].filter(Boolean).join(' · ')),
+      el('p', { class: 'meta' }, [fmtFee(g.fee), `수준 ${g.level}`, fmtDuration(g.duration_min), g.is_mine && '내 글', g.i_joined && '신청함'].filter(Boolean).join(' · ')),
       el('div', { class: 'fill' },
         el('div', { class: 'fill-text' },
           el('span', null, el('b', null, String(s.filled)), ` / ${g.capacity}명`),
@@ -166,7 +166,7 @@
     const roster = el('ul', { class: 'roster' },
       Array.from({ length: g.reserved_count }, (_, i) =>
         el('li', { class: 'host' }, i === 0 ? g.host_nickname : '주최 측', el('small', null, i === 0 ? '주최자' : '확보된 인원'))),
-      people.map((p) => el('li', null, p.nickname, el('small', null, p.pos))),
+      people.map((p) => el('li', { class: p.is_me && 'me' }, p.nickname, el('small', null, p.is_me ? `${p.pos} · 나` : p.pos))),
       Array.from({ length: s.left }, () => el('li', { class: 'free' }, '빈자리')));
 
     return el('div', { class: 'detail' },
@@ -181,49 +181,57 @@
       loadError && el('p', { class: 'errors' }, loadError),
       roster,
       g.is_mine && hostPanel(g, people),   // 내가 쓴 글에만 관리 메뉴 표시
-      isJoinable(s) ? joinPanel(g) : el('p', { class: 'hint' }, '지금은 참가 신청을 받지 않는 게임입니다.'),
-      people.length > 0 && leavePanel(g));
+      // 이미 신청했으면 취소, 내 글이면 신청 불가, 그 외에는 신청
+      g.i_joined ? leavePanel(g)
+        : g.is_mine ? null
+        : isJoinable(s) ? joinPanel(g)
+        : el('p', { class: 'hint' }, '지금은 참가 신청을 받지 않는 게임입니다.'));
   }
 
-  function field(label, attrs) {
-    const input = el('input', attrs);
-    return { input, node: el('label', null, label, input) };
-  }
-
+  // 참가 신청 (회원 전용). 닉네임은 회원가입 때 적은 값을 서버가 사용함
   function joinPanel(g) {
-    const nick = field('닉네임', { maxlength: 20, required: true, autocomplete: 'nickname', value: state.user?.nickname });
-    const pw = field('비밀번호 (취소용)', { type: 'password', minlength: 4, required: true, autocomplete: 'off' });
+    if (!state.user) {
+      return el('div', { class: 'panel' },
+        el('h3', null, '참가 신청'),
+        el('p', { class: 'hint' }, '참가 신청은 회원만 할 수 있습니다.'),
+        el('div', { class: 'actions' },
+          el('button', { class: 'btn primary', type: 'button', onclick: () => {
+            $('#detail').close();
+            openAuth('login', '참가 신청을 하려면 로그인이 필요합니다.', () => openDetail(g.id));
+          } }, '로그인하고 신청하기')));
+    }
+
     const pos = el('select', null, POSITIONS.map((p) => el('option', null, p)));
     const err = el('p', { class: 'errors', hidden: true });
     const btn = el('button', { class: 'btn primary', type: 'submit' }, '참가 신청');
     return el('form', { class: 'panel', onsubmit: (e) => {
       e.preventDefault();
       run(btn, err, async () => {
-        await callRpc('join_game', {
-          p_game_id: g.id, p_nickname: nick.input.value, p_pos: pos.value, p_password: pw.input.value });
+        await callRpc('join_game', { p_game_id: g.id, p_pos: pos.value });
         toast('참가 신청이 완료됐습니다');
         await refresh(g.id);
       });
     } },
       el('h3', null, '참가 신청'),
-      el('div', { class: 'inline' }, nick.node, el('label', null, '포지션', pos), pw.node),
-      err, el('div', { class: 'actions' }, btn));
+      el('p', { class: 'hint' }, `${state.user.nickname} 님 이름으로 신청됩니다.`),
+      el('div', { class: 'inline' }, el('label', null, '포지션', pos), btn),
+      err);
   }
 
   function leavePanel(g) {
-    const nick = field('신청한 닉네임', { maxlength: 20, required: true });
-    const pw = field('비밀번호', { type: 'password', required: true, autocomplete: 'off' });
     const err = el('p', { class: 'errors', hidden: true });
-    const btn = el('button', { class: 'btn', type: 'submit' }, '신청 취소');
-    const form = el('form', { onsubmit: (e) => {
-      e.preventDefault();
+    const btn = el('button', { class: 'btn', type: 'button', onclick: () => {
+      if (!confirm('참가 신청을 취소할까요?')) return;
       run(btn, err, async () => {
-        await callRpc('leave_game', { p_game_id: g.id, p_nickname: nick.input.value, p_password: pw.input.value });
+        await callRpc('leave_game', { p_game_id: g.id });
         toast('신청을 취소했습니다');
         await refresh(g.id);
       });
-    } }, el('div', { class: 'inline' }, nick.node, pw.node, btn), err);
-    return el('details', { class: 'panel' }, el('summary', null, '신청 취소하기'), form);
+    } }, '신청 취소');
+    return el('div', { class: 'panel' },
+      el('h3', null, '참가 신청을 완료했습니다'),
+      el('div', { class: 'actions' }, btn),
+      err);
   }
 
   // 글 주인(로그인한 회원)에게만 보이는 관리 메뉴. 권한은 서버에서 다시 검사함
@@ -271,7 +279,7 @@
   // ── 모집글 쓰기 / 수정 (회원 전용) ───────────────────────────
   function openForm(game) {
     if (!state.user) {
-      openAuth('login', true);
+      openAuth('login', '모집글을 쓰려면 로그인이 필요합니다.', () => openForm());
       return;
     }
     state.editing = game || null;
@@ -370,10 +378,11 @@
     showError($('#auth-error'), '');
   }
 
-  function openAuth(mode, forWriting) {
-    state.writeAfterLogin = Boolean(forWriting);
+  // reason: 로그인 창 위에 보여줄 안내, afterLogin: 로그인 성공 뒤 이어서 할 동작
+  function openAuth(mode, reason, afterLogin) {
+    state.afterLogin = afterLogin || null;
     $('#auth-form').reset();
-    $('#auth-reason').hidden = !forWriting;
+    showError($('#auth-reason'), reason);
     $('#auth-info').hidden = true;
     setAuthMode(mode);
     $('#auth-dialog').showModal();
@@ -384,7 +393,7 @@
     const changed = (state.user?.email || '') !== (user?.email || '');
     state.user = user;
     renderAuth();
-    if (changed) loadGames();
+    return changed ? loadGames() : Promise.resolve();
   }
 
   $('#auth-switch').addEventListener('click', () => {
@@ -418,13 +427,15 @@
         toast('로그인했습니다');
       }
 
-      applyUser(await auth.getUser());
+      await applyUser(await auth.getUser());   // 목록의 "내 글"·"신청함" 표시까지 갱신
       $('#auth-dialog').close();
-      if (state.writeAfterLogin) openForm();
+      const next = state.afterLogin;
+      state.afterLogin = null;
+      if (next) next();
     });
   });
 
-  $('#btn-login').addEventListener('click', () => openAuth('login', false));
+  $('#btn-login').addEventListener('click', () => openAuth('login'));
   $('#btn-logout').addEventListener('click', async () => {
     try {
       await auth.signOut();

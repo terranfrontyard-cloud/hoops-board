@@ -24,13 +24,13 @@
     <section id="setup" class="notice" hidden>
       <strong>예시 데이터로 보는 중입니다.</strong>
       <p>저장되지 않는 예시 화면입니다. 아무 이메일과 비밀번호로 가입·로그인해 볼 수 있습니다.
-        실제 게시판으로 쓰려면 <code>supabase</code> 폴더의 SQL 두 개를 Supabase SQL Editor에서 순서대로 실행하고,
+        실제 게시판으로 쓰려면 <code>supabase</code> 폴더의 SQL 파일을 Supabase SQL Editor에서 순서대로 실행하고,
         <code>js/config.js</code>에 Project URL과 anon 키를 넣으세요.</p>
     </section>
 
     <section class="hero">
       <h1>대관은 했는데, 10명이 안 채워졌나요?</h1>
-      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 모집글은 회원만 쓸 수 있고, 참가 신청은 가입 없이 할 수 있습니다.</p>
+      <p>모집글을 올리고 5:5 게임 인원을 채우세요. 모집글 쓰기와 참가 신청은 회원만 할 수 있습니다. 가입은 이메일만 있으면 됩니다.</p>
     </section>
 
     <div class="toolbar">
@@ -124,7 +124,7 @@
         <h2 id="auth-title">로그인</h2>
         <button type="button" class="icon-btn" data-close aria-label="닫기">✕</button>
       </div>
-      <p id="auth-reason" class="hint" hidden>모집글을 쓰려면 로그인이 필요합니다.</p>
+      <p id="auth-reason" class="hint" hidden></p>
 
       <label>이메일
         <input id="a-email" type="email" required autocomplete="email" placeholder="you@example.com">
